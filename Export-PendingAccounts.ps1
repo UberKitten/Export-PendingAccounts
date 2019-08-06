@@ -14,10 +14,10 @@
 $VaultAddress = "vault.example.com"
 
 # Location of cred file to use
-$CredFile = "user.ini"
+$CredFilePath = "user.ini"
 
 # Location of PACLI executable
-$PACLIFolder = "PACLI\Pacli.exe"
+$PACLIPath = "PACLI\Pacli.exe"
 
 # Location of output CSV file
 $OutputFile = "PendingAccounts.csv"
@@ -55,8 +55,12 @@ function SaveResults( $results ) {
 
 $ErrorActionPreference = "Stop"
 
+# Resolve relative paths
+$PACLIPath = Resolve-Path -LiteralPath $PACLIPath
+$CredFilePath = Resolve-Path -LiteralPath $CredFilePath
+
 # Get username from cred file
-$User = Select-String -Path  $CredFile -Pattern "Username=(\S*)" | % { $_.Matches.Groups[1].Value }
+$User = Select-String -LiteralPath $CredFilePath -Pattern "Username=(\S*)" | % { $_.Matches.Groups[1].Value }
 
 # Helper constants
 $PendingSafe = "PasswordManager_Pending"
@@ -64,10 +68,10 @@ $Vault = "vault"
 
 # Connect to Vault
 Import-Module PoShPACLI
-Set-PVConfiguration -ClientPath $PACLIFolder
+Set-PVConfiguration -ClientPath $PACLIPath
 Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
-$token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFile -autoChangePassword:$AutoChangePassword
+$token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
 
 # Retrieve list of objects in safe
 $token | Open-PVSafe -safe $PendingSafe
