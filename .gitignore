@@ -1,0 +1,7 @@
+# Script output files
+PendingAccounts.csv
+
+# If you put some of your PACLI files in this repo, ignore them
+user.ini
+PACLI/
+Vault/
