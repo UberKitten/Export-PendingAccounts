@@ -33,7 +33,8 @@ We need the latest PACLI executable:
 
 ### Vault User Setup
 We need a credential file for the user the script will use:
-1. Create a new CyberArk authentication user, i.e. `ExportPendingAccounts`
+1. Create a new CyberArk authentication user, i.e. `ExportPendingAccounts`  
+The password for this user will be changed automatically whenever the script is run (you can disable this by setting `$AutoChangePassword = $false`)
 2. Give the new user "List files" or "List accounts" permission on the Safe PasswordManager_Pending  
 **Do not give this user additional permissions or add it to Vault Admins!**
 3. If running on a server with a CyberArk component installed, you can use the built in `CreateCredFile.exe`  
