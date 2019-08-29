@@ -39,7 +39,7 @@ The password for this user will be changed automatically whenever the script is 
 **Do not give this user additional permissions or add it to Vault Admins!**
 3. If running on a server with a CyberArk component installed, you can use the built in `CreateCredFile.exe`  
 If running on a different machine, you will need to copy the `CreateCredFile.exe` and its dependent files over from an existing CyberArk component install
-4. Run `CreateCredFile.exe Password user.ini`
+4. Run `CreateCredFile.exe user.ini Password`
 5. Provide the new username and password, then hit enter to all the other questions
 6. Store the `user.ini` file in the same location as the script (you can also configure a path in the script)
 
