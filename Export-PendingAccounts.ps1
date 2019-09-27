@@ -20,7 +20,10 @@ $CredFilePath = "user.ini"
 $PACLIPath = "PACLI\Pacli.exe"
 
 # Location of output CSV file
-$OutputFile = "PendingAccounts.csv"
+$OutputFile = "PendingAccounts" + (Get-Date -Format "MMddyyyy-HHmm") + ".csv"
+
+# Location of temporary processing file
+$InProgressFile = "Temp-SafeFileNames.csv"
 
 # If you use a self-signed cert on the Vault, set this to true
 $AllowSelfSignedCertificates = $false
@@ -66,6 +69,11 @@ $User = Select-String -LiteralPath $CredFilePath -Pattern "Username=(\S*)" | % {
 $PendingSafe = "PasswordManager_Pending"
 $Vault = "vault"
 
+# Kill PACLI if it's still around
+try {
+    Stop-PVPacli
+} catch {}
+
 # Connect to Vault
 Import-Module PoShPACLI
 Set-PVConfiguration -ClientPath $PACLIPath
@@ -73,30 +81,52 @@ Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
 $token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
 
-# Retrieve list of objects in safe
+# Does an inprogress file exist?
+if (Test-Path -LiteralPath $InProgressFile) {
+    # Read in list of files
+    $files = Import-Csv -LiteralPath $InProgressFile
+}
+
+# Always open safe
 $token | Open-PVSafe -safe $PendingSafe
-$files = $token | Get-PVFileList -safe $PendingSafe -folder "Root"
+
+# If the inprogress file is empty then pull new files
+if ($files -eq $false -or $files.Count -le 0) {
+    # Retrieve list of objects in safe
+    $files = $token | Get-PVFileList -safe $PendingSafe -folder "Root"
+}
 
 # Remove internal CPM .txt files
 $files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
+
+# Export this to inprogress file
+$files | Export-Csv -LiteralPath $InProgressFile
 
 # We use this later to select the properties we want with certain properties first
 $SelectProperties = $ShowFirstProperties
 
 # Add file category information to objects
-foreach ($file in $files) {
-    $categories = $token | Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
+try {
+    foreach ($file in $files) {
+        $categories = $token | Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
 
-    foreach ($category in $categories) {
-        # Add the category as a property to the original file object
-        $file | Add-Member -NotePropertyName $category.CategoryName -NotePropertyValue $category.CategoryValue
+        foreach ($category in $categories) {
+            # Add the category as a property to the original file object
+            $file | Add-Member -NotePropertyName $category.CategoryName -NotePropertyValue $category.CategoryValue
 
-        # If this is the first time we've seen this property, add it here
-        # Different objects have different properties (file categories) so we have to check each time
-        if ($SelectProperties -notcontains $category.CategoryName) {
-            $SelectProperties += $category.CategoryName
+            # If this is the first time we've seen this property, add it here
+            # Different objects have different properties (file categories) so we have to check each time
+            if ($SelectProperties -notcontains $category.CategoryName) {
+                $SelectProperties += $category.CategoryName
+            }
         }
     }
+
+    # We finished everything so we can delete inprogress file
+    Remove-Item $InProgressFile
+} catch {
+    # Export this to inprogress file to resume later
+    $files | Export-Csv -LiteralPath $InProgressFile
 }
 
 # Find dependencies and fill in some basic info
@@ -122,9 +152,11 @@ $files = $files | Select $SelectProperties -ExcludeProperty $ExcludeProperties
 
 $DebugPreference = "silentlycontinue"
 $VerbosePreference = "silentlycontinue"
-
-Disconnect-PVVault -vault $Vault -user $User
-Stop-PVPacli
+# If we failed earlier we might not be able to disconnect, oh well
+try {
+    Disconnect-PVVault -vault $Vault -user $User
+    Stop-PVPacli
+} catch {}
 
 # Pass result object to user-customizable function
 SaveResults -results $files
