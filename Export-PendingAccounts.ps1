@@ -81,6 +81,9 @@ Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
 $token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
 
+# Clean up variable if re-running script in same terminal
+$files = $false
+
 # Does an inprogress file exist?
 if (Test-Path -LiteralPath $InProgressFile) {
     # Read in list of files
@@ -94,13 +97,13 @@ $token | Open-PVSafe -safe $PendingSafe
 if ($files -eq $false -or $files.Count -le 0) {
     # Retrieve list of objects in safe
     $files = $token | Get-PVFileList -safe $PendingSafe -folder "Root"
+    
+    # Remove internal CPM .txt files
+    $files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
+
+    # Export this to inprogress file
+    $files | Export-Csv -LiteralPath $InProgressFile
 }
-
-# Remove internal CPM .txt files
-$files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
-
-# Export this to inprogress file
-$files | Export-Csv -LiteralPath $InProgressFile
 
 # We use this later to select the properties we want with certain properties first
 $SelectProperties = $ShowFirstProperties
@@ -120,13 +123,22 @@ try {
                 $SelectProperties += $category.CategoryName
             }
         }
+
+        # Remove this file from the inprogress file if we fail
+        $file | Add-Member -NotePropertyName Processed -NotePropertyValue $true
+        
+        # Uncomment to test the resume functionality
+        # throw "Test error"
     }
 
     # We finished everything so we can delete inprogress file
     Remove-Item $InProgressFile
 } catch {
+    Write-Host "Encountered error, saving current progress to $InProgressFile to resume"
+    Write-Host "Error: $_"
     # Export this to inprogress file to resume later
-    $files | Export-Csv -LiteralPath $InProgressFile
+    # Skip any files we already processed
+    $files | Where { $_.Processed -ne $true } | Export-Csv -LiteralPath $InProgressFile
 }
 
 # Find dependencies and fill in some basic info
