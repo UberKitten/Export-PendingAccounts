@@ -73,8 +73,8 @@ $ShowFirstProperties = "UserName", "Address", "DiscoveryPlatformType", "Dependen
 # Properties to exclude in final report
 # We use this to remove some internal properties not useful in this case
 $ExcludeProperties =  "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
-    "Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
-    "LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
+"Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
+"LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
 
 # End settings
 
@@ -110,7 +110,7 @@ Set-PVConfiguration -ClientPath $PACLIPath
 Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
 try {
-Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
+    Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
 }
 catch {
     Stop-PVPacli
@@ -152,9 +152,11 @@ foreach ($file in $files | Where { $_.MasterPassName -ne $null }) {
 
     # Copy property info over if not null
     foreach ($PropertyName in $PropertiesToCopy) {
-        $property = $masterpass | select -ExpandProperty $PropertyName
-        if ($property -ne $null) {
-            $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+        if ($masterpass.PSObject.Properties.Name -contains $PropertyName) {
+            $property = $masterpass | select -ExpandProperty $PropertyName
+            if ($property -ne $null) {
+                $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+            }
         }
     }
 }
