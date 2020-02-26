@@ -13,6 +13,8 @@
     Set to $true if vault uses a self signed certificate
     .PARAMETER AuthChangePassword
     If true, password in $credFilePath will be rotated on login. Defaults to true.
+    .PARAMETER Noisy
+    Switch to turn on output for a long running job.
     .NOTES
     ###########################################################
     #   
