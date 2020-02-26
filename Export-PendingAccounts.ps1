@@ -71,11 +71,17 @@ Import-Module PoShPACLI
 Set-PVConfiguration -ClientPath $PACLIPath
 Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
-$token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
+try {
+Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
+}
+catch {
+    Stop-PVPacli
+    throw
+}
 
 # Retrieve list of objects in safe
-$token | Open-PVSafe -safe $PendingSafe
-$files = $token | Get-PVFileList -safe $PendingSafe -folder "Root"
+Open-PVSafe -safe $PendingSafe
+$files = Get-PVFileList -safe $PendingSafe -folder "Root"
 
 # Remove internal CPM .txt files
 $files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
@@ -85,7 +91,7 @@ $SelectProperties = $ShowFirstProperties
 
 # Add file category information to objects
 foreach ($file in $files) {
-    $categories = $token | Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
+    $categories = Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
 
     foreach ($category in $categories) {
         # Add the category as a property to the original file object
@@ -123,7 +129,7 @@ $files = $files | Select $SelectProperties -ExcludeProperty $ExcludeProperties
 $DebugPreference = "silentlycontinue"
 $VerbosePreference = "silentlycontinue"
 
-Disconnect-PVVault -vault $Vault -user $User
+Disconnect-PVVault 
 Stop-PVPacli
 
 # Pass result object to user-customizable function
