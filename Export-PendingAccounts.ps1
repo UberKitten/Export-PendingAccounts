@@ -1,32 +1,70 @@
-﻿###########################################################
-#
-# Export-PendingAccounts.ps1
-#
-# Copyright 2019 Michael West
-#
-# This script is not officially supported or endorsed by CyberArk, Inc.
-#
-# Licensed under the MIT License
-#
-###########################################################
+﻿<#
+	.SYNOPSIS
+	Exports pending accounts from vault into CSV file
+	.PARAMETER VaultAddress
+	The DNS Name or IP Address of the vault. Required.
+	.PARAMETER PACLIPath
+	Path to the PACLI executable. Defaults to "PACLI\pacli.exe"
+	.PARAMETER CredFilePath
+	Path to credentials file created by CyberArk CreateCredFile.exe. Defaults to "user.ini"
+	.PARAMETER OutputFile
+    Name of CSV file for output. Defaults to "PendingAccounts.csv"
+    .PARAMETER AllowSelfSignedCertificates
+    Set to $true if vault uses a self signed certificate
+    .PARAMETER AuthChangePassword
+    If true, password in $credFilePath will be rotated on login. Defaults to true.
+	.NOTES
+	###########################################################
+    #   
+    # Export-PendingAccounts.ps1
+    #
+    # Copyright 2019 Michael West
+    #
+    # This script is not officially supported or endorsed by CyberArk, Inc.
+    #
+    # Licensed under the MIT License
+    #
+    ###########################################################
+    Updates by Justin B. Alcorn 2020
+#>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword","")]
+Param(
+    [Parameter(
+        Mandatory = $true,
+        ValueFromPipelineByPropertyName = $true
+    )]
+    [string]$VaultAddress,
 
-# Change these properties for your Vault install:
-$VaultAddress = "vault.example.com"
+    [Parameter(
+        Mandatory = $false,
+        ValueFromPipelineByPropertyName = $true
+    )]
+    [string]$PACLIPath = "PACLI\Pacli.exe",
 
-# Location of cred file to use
-$CredFilePath = "user.ini"
+    [Parameter(
+        Mandatory = $false,
+        ValueFromPipelineByPropertyName = $true
+    )]
+    [string]$CredFilePath = "user.ini",
 
-# Location of PACLI executable
-$PACLIPath = "PACLI\Pacli.exe"
+    [Parameter(
+        Mandatory = $false,
+        ValueFromPipelineByPropertyName = $true
+    )]
+    [string]$OutputFile = "PendingAccounts.csv",
 
-# Location of output CSV file
-$OutputFile = "PendingAccounts.csv"
+    [Parameter(
+        Mandatory = $false,
+        ValueFromPipelineByPropertyName = $true
+    )]
+    [boolean]$AllowSelfSignedCertificates = $false,
 
-# If you use a self-signed cert on the Vault, set this to true
-$AllowSelfSignedCertificates = $false
-
-# This will cause PACLI to rotate the password of the account in the cred file automatically
-$AutoChangePassword = $true
+    [Parameter(
+        Mandatory = $false,
+        ValueFromPipelineByPropertyName = $true
+    )]
+    [boolean]$AutoChangePassword = $true
+)
 
 # Properties to show first in final report columns
 # This is so that the output looks similar to the Pending Accounts tab
