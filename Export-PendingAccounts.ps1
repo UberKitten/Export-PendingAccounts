@@ -27,7 +27,7 @@
     ###########################################################
     Updates by Justin B. Alcorn 2020
 #>
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword","")]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "")]
 Param(
     [Parameter(
         Mandatory = $true,
@@ -72,9 +72,9 @@ $ShowFirstProperties = "UserName", "Address", "DiscoveryPlatformType", "Dependen
 
 # Properties to exclude in final report
 # We use this to remove some internal properties not useful in this case
-$ExcludeProperties =  "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
-    "Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
-    "LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
+$ExcludeProperties = "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
+"Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
+"LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
 
 # End settings
 
@@ -110,7 +110,7 @@ Set-PVConfiguration -ClientPath $PACLIPath
 Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
 try {
-Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
+    Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
 }
 catch {
     Stop-PVPacli
@@ -145,16 +145,18 @@ foreach ($file in $files) {
 
 # Find dependencies and fill in some basic info
 foreach ($file in $files | Where { $_.MasterPassName -ne $null }) {
-    $masterpass = $files | Where { $_.Filename -eq $file.MasterPassName}
+    $masterpass = $files | Where { $_.Filename -eq $file.MasterPassName }
 
     $PropertiesToCopy = "UserName", "Dependencies", "MachineOSFamily", "OSVersion", "Domain", "OU",
     "LastPasswordSetDate", "LastLogonDate", "AccountExpirationDate", "PasswordNeverExpires", "AccountCategory"
 
     # Copy property info over if not null
     foreach ($PropertyName in $PropertiesToCopy) {
-        $property = $masterpass | select -ExpandProperty $PropertyName
-        if ($property -ne $null) {
-            $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+        if ($masterpass.PSObject.Properties.Name -contains $PropertyName) {
+            $property = $masterpass | select -ExpandProperty $PropertyName
+            if ($property -ne $null) {
+                $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+            }
         }
     }
 }
