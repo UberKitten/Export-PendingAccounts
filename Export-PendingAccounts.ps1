@@ -190,7 +190,7 @@ foreach ($file in $files | Where-Object { $null -ne $_.MasterPassName }) {
     # Copy property info over if not null
     foreach ($PropertyName in $PropertiesToCopy) {
         $property = $masterpass | Select-Object -ExpandProperty $PropertyName
-        if ($null -eq $property) {
+        if ($null -ne $property) {
             $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
         }
     }
