@@ -128,7 +128,11 @@ $files = $files | Where-Object { $_.Filename -notmatch ".*\.txt$" }
 $SelectProperties = $ShowFirstProperties
 
 # Add file category information to objects
+$totfiles = $files.count
+$filescnt = 0
 foreach ($file in $files) {
+    $filescnt++
+    Write-Progress -Activity "Getting File Categories" -Status "File $($filescnt) of $($totfiles)" -PercentComplete (($filescnt / $totfiles) * 100)
     $categories = Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
 
     foreach ($category in $categories) {
@@ -147,8 +151,12 @@ foreach ($file in $files) {
 $PropertiesToCopy = "UserName", "Dependencies", "MachineOSFamily", "OSVersion", "Domain", "OU",
 "LastPasswordSetDate", "LastLogonDate", "AccountExpirationDate", "PasswordNeverExpires", "AccountCategory"
 
+$totfiles = ($files | Where-Object { $null -ne $_.MasterPassName }).count
+$filescnt = 0
 foreach ($file in $files | Where-Object { $null -ne $_.MasterPassName }) {
-    $masterpass = $files | Where-Object { $null -eq $_.Filename }
+    $filescnt++
+    Write-Progress -Activity "Finding Dependencies" -Status "File $($filescnt) of $($totfiles)" -PercentComplete (($filescnt / $totfiles) * 100)
+    $masterpass = $files | Where-Object { $_.Filename -eq $file.MasterPassName }
 
     # Copy property info over if not null
     foreach ($PropertyName in $PropertiesToCopy) {
