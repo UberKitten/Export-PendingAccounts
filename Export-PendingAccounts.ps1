@@ -27,7 +27,7 @@
     ###########################################################
     Updates by Justin B. Alcorn 2020
 #>
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword","")]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingPlainTextForPassword", "")]
 Param(
     [Parameter(
         Mandatory = $true,
@@ -72,9 +72,9 @@ $ShowFirstProperties = "UserName", "Address", "DiscoveryPlatformType", "Dependen
 
 # Properties to exclude in final report
 # We use this to remove some internal properties not useful in this case
-$ExcludeProperties =  "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
-    "Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
-    "LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
+$ExcludeProperties = "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
+"Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
+"LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
 
 # End settings
 
@@ -98,7 +98,7 @@ $PACLIPath = Resolve-Path -LiteralPath $PACLIPath
 $CredFilePath = Resolve-Path -LiteralPath $CredFilePath
 
 # Get username from cred file
-$User = Select-String -LiteralPath $CredFilePath -Pattern "Username=(\S*)" | % { $_.Matches.Groups[1].Value }
+$User = Select-String -LiteralPath $CredFilePath -Pattern "Username=(\S*)" | ForEach-Object { $_.Matches.Groups[1].Value }
 
 # Helper constants
 $PendingSafe = "PasswordManager_Pending"
@@ -110,7 +110,7 @@ Set-PVConfiguration -ClientPath $PACLIPath
 Start-PVPacli
 New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
 try {
-Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
+    Connect-PVVault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
 }
 catch {
     Stop-PVPacli
@@ -118,11 +118,11 @@ catch {
 }
 
 # Retrieve list of objects in safe
-Open-PVSafe -safe $PendingSafe
+Open-PVSafe -safe $PendingSafe | Out-Null
 $files = Get-PVFileList -safe $PendingSafe -folder "Root"
 
 # Remove internal CPM .txt files
-$files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
+$files = $files | Where-Object { $_.Filename -notmatch ".*\.txt$" }
 
 # We use this later to select the properties we want with certain properties first
 $SelectProperties = $ShowFirstProperties
@@ -144,17 +144,19 @@ foreach ($file in $files) {
 }
 
 # Find dependencies and fill in some basic info
-foreach ($file in $files | Where { $_.MasterPassName -ne $null }) {
-    $masterpass = $files | Where { $_.Filename -eq $file.MasterPassName}
+$PropertiesToCopy = "UserName", "Dependencies", "MachineOSFamily", "OSVersion", "Domain", "OU",
+"LastPasswordSetDate", "LastLogonDate", "AccountExpirationDate", "PasswordNeverExpires", "AccountCategory"
 
-    $PropertiesToCopy = "UserName", "Dependencies", "MachineOSFamily", "OSVersion", "Domain", "OU",
-    "LastPasswordSetDate", "LastLogonDate", "AccountExpirationDate", "PasswordNeverExpires", "AccountCategory"
+foreach ($file in $files | Where-Object { $null -ne $_.MasterPassName }) {
+    $masterpass = $files | Where-Object { $null -eq $_.Filename }
 
     # Copy property info over if not null
     foreach ($PropertyName in $PropertiesToCopy) {
-        $property = $masterpass | select -ExpandProperty $PropertyName
-        if ($property -ne $null) {
-            $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+        if ($masterpass.PSObject.Properties.Name -contains $PropertyName) {
+            $property = $masterpass | Select-Object -ExpandProperty $PropertyName
+            if ($null -ne $property) {
+                $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+            }
         }
     }
 }
@@ -162,7 +164,7 @@ foreach ($file in $files | Where { $_.MasterPassName -ne $null }) {
 
 # Remove the excluded properties
 # We do this last because the user might exclude properties like MasterPassName we need earlier
-$files = $files | Select $SelectProperties -ExcludeProperty $ExcludeProperties
+$files = $files | Select-Object $SelectProperties -ExcludeProperty $ExcludeProperties
 
 $DebugPreference = "silentlycontinue"
 $VerbosePreference = "silentlycontinue"
