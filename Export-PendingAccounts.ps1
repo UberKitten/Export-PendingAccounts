@@ -2,7 +2,7 @@
 #
 # Export-PendingAccounts.ps1
 #
-# Copyright 2019 Astra West
+# Copyright 2020 Michael West
 #
 # This script is not officially supported or endorsed by CyberArk, Inc.
 #
@@ -10,121 +10,188 @@
 #
 ###########################################################
 
-# Change these properties for your Vault install:
-$VaultAddress = "vault.example.com"
+function Export-PendingAccounts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$True, HelpMessage="Enter the Vault server address")]
+        [string]$VaultAddress
+    )
 
-# Location of cred file to use
-$CredFilePath = "user.ini"
-
-# Location of PACLI executable
-$PACLIPath = "PACLI\Pacli.exe"
-
-# Location of output CSV file
-$OutputFile = "PendingAccounts.csv"
-
-# If you use a self-signed cert on the Vault, set this to true
-$AllowSelfSignedCertificates = $false
-
-# This will cause PACLI to rotate the password of the account in the cred file automatically
-$AutoChangePassword = $true
-
-# Properties to show first in final report columns
-# This is so that the output looks similar to the Pending Accounts tab
-$ShowFirstProperties = "UserName", "Address", "DiscoveryPlatformType", "Dependencies", "LastPasswordSetDate", "AccountCategory"
-
-# Properties to exclude in final report
-# We use this to remove some internal properties not useful in this case
-$ExcludeProperties =  "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
-    "Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
-    "LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
-
-# End settings
-
-###########################################################
-
-# The below function can be customized to meet your business needs
-
-function SaveResults( $results ) {
+    param(
+        [ValidateScript({Test-Path –Path $_ -PathType Leaf})]
+        [Parameter(Mandatory=$True, HelpMessage="Enter the Vault server address")]
+        [string]$CredFile = "user.ini"
+    )
     
-    # Save the result as a CSV to the $OutputFile configured above
-    $results | Export-Csv -Path $OutputFile -NoTypeInformation
+    param(
+        [Parameter()]
+        [string]$PacliExe
+    )
+    
+    param(
+        [Parameter()]
+        [string]$OutputFile = "PendingAccounts" + (Get-Date -Format "MMddyyyy-HHmm") + ".csv"
+    )
+    
+    param(
+        [Parameter()]
+        [string]$InProgressFile = "Temp-SafeFileNames.csv"
+    )
+    
+    param(
+        [Parameter()]
+        [string]$AutoChangePassword
+    )
+    
+    param(
+        [Parameter()]
+        [string]$AllowInsecureConnection
+    )
 
-}
+    # Change these properties for your Vault install:
+    $VaultAddress = "vault.home.ub3rk1tten.com"
 
-###########################################################
+    # Properties to show first in final report columns
+    # This is so that the output looks similar to the Pending Accounts tab
+    $ShowFirstProperties = "UserName", "Address", "DiscoveryPlatformType", "Dependencies", "LastPasswordSetDate", "AccountCategory"
 
-$ErrorActionPreference = "Stop"
+    # Properties to exclude in final report
+    # We use this to remove some internal properties not useful in this case
+    $ExcludeProperties =  "InternalName", "DeletionDate", "DeletionBy", "LastUsedDate", "LastUsedBy",
+        "Size", "History", "RetrieveLock", "LockDate", "LockedBy", "FileID", "Draft", "Accessed",
+        "LockedByGW", "LockedByUserId", "Safename", "Folder", "user", "vault", "sessionID", "MasterPassFolder"
 
-# Resolve relative paths
-$PACLIPath = Resolve-Path -LiteralPath $PACLIPath
-$CredFilePath = Resolve-Path -LiteralPath $CredFilePath
+    # End settings
 
-# Get username from cred file
-$User = Select-String -LiteralPath $CredFilePath -Pattern "Username=(\S*)" | % { $_.Matches.Groups[1].Value }
+    ###########################################################
 
-# Helper constants
-$PendingSafe = "PasswordManager_Pending"
-$Vault = "vault"
+    # The below function can be customized to meet your business needs
 
-# Connect to Vault
-Import-Module PoShPACLI
-Set-PVConfiguration -ClientPath $PACLIPath
-Start-PVPacli
-New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
-$token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFilePath -autoChangePassword:$AutoChangePassword
+    function SaveResults( $results ) {
+    
+        # Save the result as a CSV to the $OutputFile configured above
+        $results | Export-Csv -Path $OutputFile -NoTypeInformation
 
-# Retrieve list of objects in safe
-$token | Open-PVSafe -safe $PendingSafe
-$files = $token | Get-PVFileList -safe $PendingSafe -folder "Root"
+    }
 
-# Remove internal CPM .txt files
-$files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
+    ###########################################################
 
-# We use this later to select the properties we want with certain properties first
-$SelectProperties = $ShowFirstProperties
+    $ErrorActionPreference = "Stop"
 
-# Add file category information to objects
-foreach ($file in $files) {
-    $categories = $token | Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
+    # Resolve relative paths
+    $PACLIPath = Resolve-Path -LiteralPath $PACLIPath
+    $CredFile = Resolve-Path -LiteralPath $CredFile
 
-    foreach ($category in $categories) {
-        # Add the category as a property to the original file object
-        $file | Add-Member -NotePropertyName $category.CategoryName -NotePropertyValue $category.CategoryValue
+    # Get username from cred file
+    $User = Select-String -LiteralPath $CredFile -Pattern "Username=(\S*)" | % { $_.Matches.Groups[1].Value }
 
-        # If this is the first time we've seen this property, add it here
-        # Different objects have different properties (file categories) so we have to check each time
-        if ($SelectProperties -notcontains $category.CategoryName) {
-            $SelectProperties += $category.CategoryName
+    # Helper constants
+    $PendingSafe = "PasswordManager_Pending"
+    $Vault = "vault"
+
+    # Kill PACLI if it's still around
+    try {
+        Stop-PVPacli
+    } catch {}
+
+    # Connect to Vault
+    Import-Module PoShPACLI
+    Set-PVConfiguration -ClientPath $PACLIPath
+    Start-PVPacli
+    New-PVVaultDefinition -vault $Vault -address $VaultAddress -preAuthSecuredSession -trustSSC:$AllowSelfSignedCertificates
+    $token = Connect-PVVault -vault $Vault -user $User -logonFile $CredFile -autoChangePassword:$AutoChangePassword
+
+    # Clean up variable if re-running script in same terminal
+    $files = $false
+
+    # Does an inprogress file exist?
+    if (Test-Path -LiteralPath $InProgressFile) {
+        # Read in list of files
+        $files = Import-Csv -LiteralPath $InProgressFile
+    }
+
+    # Always open safe
+    $token | Open-PVSafe -safe $PendingSafe
+
+    # If the inprogress file is empty then pull new files
+    if ($files -eq $false -or $files.Count -le 0) {
+        # Retrieve list of objects in safe
+        $files = $token | Get-PVFileList -safe $PendingSafe -folder "Root"
+    
+        # Remove internal CPM .txt files
+        $files = $files | Where { $_.Filename -notmatch ".*\.txt$" }
+
+        # Export this to inprogress file
+        $files | Export-Csv -LiteralPath $InProgressFile
+    }
+
+    # We use this later to select the properties we want with certain properties first
+    $SelectProperties = $ShowFirstProperties
+
+    # Add file category information to objects
+    try {
+        foreach ($file in $files) {
+            $categories = $token | Get-PVFileCategory -safe $PendingSafe -folder "Root" -file $file.Filename
+
+            foreach ($category in $categories) {
+                # Add the category as a property to the original file object
+                $file | Add-Member -NotePropertyName $category.CategoryName -NotePropertyValue $category.CategoryValue
+
+                # If this is the first time we've seen this property, add it here
+                # Different objects have different properties (file categories) so we have to check each time
+                if ($SelectProperties -notcontains $category.CategoryName) {
+                    $SelectProperties += $category.CategoryName
+                }
+            }
+
+            # Remove this file from the inprogress file if we fail
+            $file | Add-Member -NotePropertyName Processed -NotePropertyValue $true
+        
+            # Uncomment to test the resume functionality
+            # throw "Test error"
+        }
+
+        # We finished everything so we can delete inprogress file
+        Remove-Item $InProgressFile
+    } catch {
+        Write-Host "Encountered error, saving current progress to $InProgressFile to resume"
+        Write-Host "Error: $_"
+        # Export this to inprogress file to resume later
+        # Skip any files we already processed
+        $files | Where { $_.Processed -ne $true } | Export-Csv -LiteralPath $InProgressFile
+    }
+
+    # Find dependencies and fill in some basic info
+    foreach ($file in $files | Where { $_.MasterPassName -ne $null }) {
+        $masterpass = $files | Where { $_.Filename -eq $file.MasterPassName}
+
+        $PropertiesToCopy = "UserName", "Dependencies", "MachineOSFamily", "OSVersion", "Domain", "OU",
+        "LastPasswordSetDate", "LastLogonDate", "AccountExpirationDate", "PasswordNeverExpires", "AccountCategory"
+
+        # Copy property info over if not null
+        foreach ($PropertyName in $PropertiesToCopy) {
+            $property = $masterpass | select -ExpandProperty $PropertyName
+            if ($property -ne $null) {
+                $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
+            }
         }
     }
+
+
+    # Remove the excluded properties
+    # We do this last because the user might exclude properties like MasterPassName we need earlier
+    $files = $files | Select $SelectProperties -ExcludeProperty $ExcludeProperties
+
+    $DebugPreference = "silentlycontinue"
+    $VerbosePreference = "silentlycontinue"
+    # If we failed earlier we might not be able to disconnect, oh well
+    try {
+        Disconnect-PVVault -vault $Vault -user $User
+        Stop-PVPacli
+    } catch {}
+
+    # Pass result object to user-customizable function
+    SaveResults -results $files
 }
 
-# Find dependencies and fill in some basic info
-foreach ($file in $files | Where { $_.MasterPassName -ne $null }) {
-    $masterpass = $files | Where { $_.Filename -eq $file.MasterPassName}
-
-    $PropertiesToCopy = "UserName", "Dependencies", "MachineOSFamily", "OSVersion", "Domain", "OU",
-    "LastPasswordSetDate", "LastLogonDate", "AccountExpirationDate", "PasswordNeverExpires", "AccountCategory"
-
-    # Copy property info over if not null
-    foreach ($PropertyName in $PropertiesToCopy) {
-        $property = $masterpass | select -ExpandProperty $PropertyName
-        if ($property -ne $null) {
-            $file | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $property
-        }
-    }
-}
-
-
-# Remove the excluded properties
-# We do this last because the user might exclude properties like MasterPassName we need earlier
-$files = $files | Select $SelectProperties -ExcludeProperty $ExcludeProperties
-
-$DebugPreference = "silentlycontinue"
-$VerbosePreference = "silentlycontinue"
-
-Disconnect-PVVault -vault $Vault -user $User
-Stop-PVPacli
-
-# Pass result object to user-customizable function
-SaveResults -results $files
+Export-PendingAccounts
